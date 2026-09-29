@@ -101,6 +101,9 @@ jobs:
           SHA: ${{ steps.rev.outputs.sha }}
           FORCE: ${{ inputs.force || false }}
         run: |
+          # pipefail: a failed login must fail here, not be swallowed by
+          # head and surface only after a half-hour build at the push step.
+          set -o pipefail
           latest=$(openstack image list --private --tag trove --tag fivetime \
             --name "$IMAGE_NAME" --sort created_at:desc -f value -c ID | head -1)
           have=""
