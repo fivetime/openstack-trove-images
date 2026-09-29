@@ -1,0 +1,164 @@
+name: Build Trove guest image
+
+# Builds the Trove guest image from a ref of fivetime/openstack-trove, so
+# the guest agent inside the image is the same commit as the taskmanager
+# and conductor built from that branch. The two sides talk over RPC; an
+# upstream guest image does not know the datastores the fork adds.
+#
+# The build runs the fork's own trovestack and diskimage-builder elements
+# unchanged. The guest-agent element clones its source through dib's
+# source-repositories element, which DIB_REPOLOCATION_guest_agent and
+# DIB_REPOREF_guest_agent point at the checked-out commit.
+#
+# A build is skipped when the newest guest image in Glance already carries
+# the branch head in its trove_commit property.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      trove_ref:
+        description: 'Branch or commit of fivetime/openstack-trove'
+        default: '2026.1-fivetime'
+      force:
+        description: 'Build even if Glance already has this commit'
+        type: boolean
+        default: false
+      push_to_glance:
+        description: 'Push to Glance'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trove-guest-image
+  cancel-in-progress: false
+
+env:
+  TROVE_REPO: https://github.com/fivetime/openstack-trove
+  TROVE_REF: ${{ inputs.trove_ref || '2026.1-fivetime' }}
+  GUEST_OS: ubuntu
+  GUEST_RELEASE: noble
+  IMAGE_NAME: trove-guest-ubuntu-noble-fivetime
+  OS_AUTH_URL: ${{ secrets.OS_AUTH_URL }}
+  OS_PROJECT_NAME: ${{ secrets.OS_PROJECT_NAME }}
+  OS_PROJECT_DOMAIN_NAME: ${{ secrets.OS_PROJECT_DOMAIN_NAME }}
+  OS_USERNAME: ${{ secrets.OS_USERNAME }}
+  OS_USER_DOMAIN_NAME: ${{ secrets.OS_USER_DOMAIN_NAME }}
+  OS_PASSWORD: ${{ secrets.OS_PASSWORD }}
+  OS_REGION_NAME: ${{ secrets.OS_REGION_NAME }}
+  OS_IDENTITY_API_VERSION: '3'
+  OS_INTERFACE: public
+
+jobs:
+  guest:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+
+      - name: Check out trove
+        uses: actions/checkout@v4
+        with:
+          repository: fivetime/openstack-trove
+          ref: ${{ env.TROVE_REF }}
+          path: trove
+          # pbr derives the package version from tags; without history the
+          # guest agent would be built as 0.0.1.devN.
+          fetch-depth: 0
+
+      - name: Resolve commit
+        id: rev
+        run: echo "sha=$(git -C trove rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Point the OpenStack public names at the gateway
+        if: ${{ vars.OS_GATEWAY_VIP != '' }}
+        run: |
+          # The runner does not resolve *.openstack.svc.cluster.local. The
+          # gateway routes by Host header, so the names must stay in URLs.
+          for ip in ${{ vars.OS_GATEWAY_VIP }}; do
+            names=""
+            for svc in keystone glance; do
+              names="$names ${svc}.openstack.svc.cluster.local ${svc}.openstack ${svc}"
+            done
+            echo "${ip}${names}" | sudo tee -a /etc/hosts
+          done
+          getent hosts keystone.openstack.svc.cluster.local
+
+      - name: Install OpenStack client
+        run: |
+          python3 -m venv "$RUNNER_TEMP/osc"
+          "$RUNNER_TEMP/osc/bin/pip" -q install python-openstackclient
+          echo "$RUNNER_TEMP/osc/bin" >> "$GITHUB_PATH"
+
+      - name: Decide whether to build
+        id: check
+        env:
+          SHA: ${{ steps.rev.outputs.sha }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          latest=$(openstack image list --private --tag trove --tag fivetime \
+            --name "$IMAGE_NAME" --sort created_at:desc -f value -c ID | head -1)
+          have=""
+          if [[ -n "$latest" ]]; then
+            have=$(openstack image show "$latest" -f json -c properties \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["properties"].get("trove_commit",""))')
+          fi
+          echo "branch head: $SHA   newest image ($latest): ${have:-none}"
+          if [[ "$have" == "$SHA" && "$FORCE" != "true" ]]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Glance already has $SHA, skipping." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install build dependencies
+        if: steps.check.outputs.build == 'true'
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            --no-install-recommends qemu-utils git kpartx debootstrap \
+            squashfs-tools python3-pip python3-setuptools python3-venv
+
+      - name: Build guest image
+        if: steps.check.outputs.build == 'true'
+        env:
+          DIB_REPOLOCATION_guest_agent: ${{ github.workspace }}/trove
+          DIB_REPOREF_guest_agent: ${{ steps.rev.outputs.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/images"
+          cd trove/integration/scripts
+          ./trovestack build-image "$GUEST_OS" "$GUEST_RELEASE" false ubuntu \
+            "$RUNNER_TEMP/images/$IMAGE_NAME.qcow2"
+
+      - name: Verify the guest agent is the resolved commit
+        if: steps.check.outputs.build == 'true'
+        env:
+          SHA: ${{ steps.rev.outputs.sha }}
+        run: |
+          img="$RUNNER_TEMP/images/$IMAGE_NAME.qcow2"
+          sudo modprobe nbd max_part=8
+          sudo qemu-nbd --read-only --connect=/dev/nbd0 "$img"
+          trap 'sudo umount /mnt/guest || true; sudo qemu-nbd --disconnect /dev/nbd0' EXIT
+          sleep 2
+          root=$(lsblk -lnpo NAME,FSTYPE /dev/nbd0 | awk '$2=="ext4"{print $1; exit}')
+          sudo mkdir -p /mnt/guest
+          sudo mount -o ro "$root" /mnt/guest
+          got=$(sudo git -c safe.directory='*' -C /mnt/guest/opt/guest-agent rev-parse HEAD)
+          echo "guest agent source: $got"
+          test "$got" = "$SHA"
+          sudo test -x /mnt/guest/opt/guest-agent-venv/bin/trove-guestagent
+          echo "Built $IMAGE_NAME from trove $SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push to Glance
+        if: >-
+          steps.check.outputs.build == 'true' &&
+          (github.event_name == 'schedule' || inputs.push_to_glance)
+        run: |
+          bash guest/push-to-glance.sh \
+            "$RUNNER_TEMP/images/$IMAGE_NAME.qcow2" "$IMAGE_NAME" \
+            "${{ steps.rev.outputs.sha }}"
