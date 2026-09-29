@@ -13,7 +13,11 @@
 # without re-registering anything.
 #
 # Environment: the usual OS_* variables for an admin user, plus
-#   SERVICE_PROJECT  project that owns the image (default: service)
+#   SERVICE_PROJECT         project that owns the image (default: service)
+#   SERVICE_PROJECT_DOMAIN  its domain (default: service). openstack-helm
+#                           puts service users and their project in the
+#                           "service" domain, and a same-named project in
+#                           Default makes a bare name ambiguous.
 #   KEEP             older builds of the same name to keep (default: 2)
 
 set -Eeuo pipefail
@@ -22,6 +26,7 @@ src=${1:?image file}
 name=${2:?image name}
 commit=${3:?trove commit}
 SERVICE_PROJECT=${SERVICE_PROJECT:-service}
+SERVICE_PROJECT_DOMAIN=${SERVICE_PROJECT_DOMAIN:-service}
 KEEP=${KEEP:-2}
 
 raw=${src%.*}.raw
@@ -29,7 +34,8 @@ if [[ "$src" != "$raw" ]]; then
     qemu-img convert -p -O raw "$src" "$raw"
 fi
 
-owner=$(openstack project show "$SERVICE_PROJECT" -f value -c id)
+owner=$(openstack project show --domain "$SERVICE_PROJECT_DOMAIN" \
+    "$SERVICE_PROJECT" -f value -c id)
 
 id=$(openstack image create "$name" \
     --disk-format raw --container-format bare \
