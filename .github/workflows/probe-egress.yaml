@@ -1,0 +1,41 @@
+name: Probe runner egress
+
+# Diagnostic. Tests every address of the hosts the guest image build
+# downloads from, one address at a time, over IPv4 and IPv6.
+#
+# A host with several addresses can work from curl and fail from pip: each
+# client picks its own address, and one request getting through says nothing
+# about the other addresses.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Address preference on the runner
+        run: |
+          grep -vE '^\s*(#|$)' /etc/gai.conf || echo "(gai.conf has no rules)"
+          ip -br addr | grep -v '^lo'
+          ip -6 route show default; ip -4 route show default
+
+      - name: Probe each address
+        run: |
+          probe() { # host path
+            local host=$1 path=$2 a out
+            for a in $(getent ahosts "$host" | awk '{print $1}' | sort -u); do
+              out=$(curl -s -o /dev/null -m 20 --resolve "$host:443:$a" \
+                      -w '%{http_code} %{time_connect} %{time_appconnect} %{time_total} %{size_download}' \
+                      "https://$host$path") || true
+              echo "PROBE $host $a -> ${out:-no-response}"
+            done
+          }
+          probe pypi.org /simple/pbr/
+          probe files.pythonhosted.org /packages/9b/d4/d3c7d029de6287ff7bd048e628920d4336b4f8d82cfc00ff078bdbb212a3/Routes-2.5.1-py2.py3-none-any.whl.metadata
+          probe opendev.org /openstack/requirements/raw/branch/master/upper-constraints.txt
+          probe archive.ubuntu.com /ubuntu/dists/noble/Release
