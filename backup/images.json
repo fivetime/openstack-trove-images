@@ -1,10 +1,11 @@
 [
-  {"datastore": "mysql",      "version": "8.4",   "os_version": "24.04"},
-  {"datastore": "mariadb",    "version": "11.4",  "os_version": "24.04"},
-  {"datastore": "mariadb",    "version": "11.8",  "os_version": "24.04"},
-  {"datastore": "postgresql", "version": "17",    "os_version": "24.04"},
-  {"datastore": "postgresql", "version": "18",    "os_version": "24.04"},
-  {"datastore": "valkey",     "version": "9",     "os_version": "24.04"},
-  {"datastore": "keydb",      "version": "6.3.3", "os_version": "24.04"},
-  {"datastore": "redis",      "version": "7.2",   "os_version": "24.04"}
+  {"datastore": "mysql",      "version": "8.4",   "os_version": "24.04", "strategy": "xtrabackup"},
+  {"datastore": "percona",    "version": "8.4",   "os_version": "24.04", "strategy": "xtrabackup"},
+  {"datastore": "mariadb",    "version": "11.4",  "os_version": "24.04", "strategy": "mariabackup"},
+  {"datastore": "mariadb",    "version": "11.8",  "os_version": "24.04", "strategy": "mariabackup"},
+  {"datastore": "postgresql", "version": "17",    "os_version": "24.04", "strategy": "pg_basebackup"},
+  {"datastore": "postgresql", "version": "18",    "os_version": "24.04", "strategy": "pg_basebackup"},
+  {"datastore": "valkey",     "version": "9",     "os_version": "24.04", "strategy": "valkeybackup"},
+  {"datastore": "keydb",      "version": "6.3.3", "os_version": "24.04", "strategy": "keydbbackup"},
+  {"datastore": "redis",      "version": "7.2",   "os_version": "24.04", "strategy": "redisbackup"}
 ]

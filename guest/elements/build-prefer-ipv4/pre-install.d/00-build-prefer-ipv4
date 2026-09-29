@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ ${DIB_DEBUG_TRACE:-0} -gt 0 ]; then
+    set -x
+fi
+set -eu
+set -o pipefail
+
+# The marker lets finalise.d remove exactly this line and nothing else.
+echo "precedence ::ffff:0:0/96  100  # build-prefer-ipv4" >> /etc/gai.conf

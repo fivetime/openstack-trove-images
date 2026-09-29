@@ -132,6 +132,9 @@ jobs:
         env:
           DIB_REPOLOCATION_guest_agent: ${{ github.workspace }}/trove
           DIB_REPOREF_guest_agent: ${{ steps.rev.outputs.sha }}
+          # Elements of this repository, added to the ones trovestack uses.
+          DIB_LOCAL_ELEMENTS_PATH: ${{ github.workspace }}/guest/elements
+          TROVE_DIB_EXTRA_ELEMENTS: build-prefer-ipv4
         run: |
           mkdir -p "$RUNNER_TEMP/images"
           cd trove/integration/scripts
@@ -151,6 +154,11 @@ jobs:
           root=$(lsblk -lnpo NAME,FSTYPE /dev/nbd0 | awk '$2=="ext4"{print $1; exit}')
           sudo mkdir -p /mnt/guest
           sudo mount -o ro "$root" /mnt/guest
+          # Build-time settings must not be left in the image.
+          if sudo grep -q 'build-prefer-ipv4' /mnt/guest/etc/gai.conf; then
+            echo "the image still prefers IPv4 from the build" >&2
+            exit 1
+          fi
           got=$(sudo git -c safe.directory='*' -C /mnt/guest/opt/guest-agent rev-parse HEAD)
           echo "guest agent source: $got"
           test "$got" = "$SHA"

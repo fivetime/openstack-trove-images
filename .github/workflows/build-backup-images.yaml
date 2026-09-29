@@ -126,21 +126,11 @@ jobs:
         env:
           IMAGE: ${{ steps.rev.outputs.image }}
         run: |
-          # The strategy the guest agent will ask for, read from the same
-          # commit's configuration defaults rather than guessed from the
-          # datastore name.
-          strategy=$(python3 - <<'PY'
-          import os, re
-          src = open('trove/trove/common/cfg.py').read()
-          ds = os.environ['DATASTORE']
-          # Either a family builder call or a plain option list.
-          m = re.search(r"datastore_name='%s',\s*backup_strategy='([^']+)'" % ds, src)
-          if not m:
-              group = re.search(r"%s_opts = \[(.*?)\n\]" % ds, src, re.S).group(1)
-              m = re.search(r"'backup_strategy',\s*default='([^']+)'", group)
-          print(m.group(1))
-          PY
-          )
+          # The strategy is what the guest agent passes as --driver: the
+          # datastore app's get_backup_strategy(). That is not always the
+          # [<datastore>] backup_strategy default; MySQL and Percona return
+          # xtrabackup whatever the option says.
+          strategy="${{ matrix.image.strategy }}"
           echo "backup strategy for $DATASTORE: $strategy"
           docker run --rm -i "$IMAGE" python3 - "$strategy" < images/backup/smoke.py
           # The check has to be able to fail: a driver that does not exist

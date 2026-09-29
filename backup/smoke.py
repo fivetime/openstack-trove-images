@@ -18,5 +18,10 @@ import main  # noqa: E402
 # driver against the allowed choices.
 main.CONF.register_cli_opts(main.cli_opts)
 main.CONF(['--driver', sys.argv[1]], project='trove-backup')
-cls = importutils.import_class(main.driver_mapping[main.CONF.driver])
-print('driver', cls.__module__ + '.' + cls.__name__)
+names = [main.CONF.driver]
+# Incremental backups use the driver registered under "<name>_inc".
+if names[0] + '_inc' in main.driver_mapping:
+    names.append(names[0] + '_inc')
+for name in names:
+    cls = importutils.import_class(main.driver_mapping[name])
+    print('driver', name, '=', cls.__module__ + '.' + cls.__name__)

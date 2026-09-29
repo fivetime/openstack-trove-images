@@ -44,6 +44,26 @@ openstack datastore version create <版本> <datastore> <manager> "" \
     --image-tags trove,fivetime --active
 ```
 
+### 构建期间优先 IPv4(`guest/elements/build-prefer-ipv4`)
+
+构建在 chroot 里用 apt 和 pip 装包,二者都按 `getaddrinfo` 返回的顺序逐个试地址,IPv6 在前。
+构建机的 IPv6 出网不通时,每个连接都要先等超时才轮到 IPv4。2026-09-29 实例:正常 15 分钟的构建,
+在"装 guest agent 依赖"这一步卡到 90 分钟上限被取消,日志里全是
+`ReadTimeoutError("HTTPSConnectionPool(host='pypi.org' ...` 后重试,平均每个请求 4 分钟。
+
+**构建机自己配了优先 IPv4 也没用** —— chroot 里有它自己的 `/etc/gai.conf`。
+
+这个元素在 `pre-install.d` 往 chroot 的 `/etc/gai.conf` 加一行优先 IPv4,在 `finalise.d` 删掉,
+成品镜像和不带这个元素构建出来的一样;流水线挂载镜像核对时会确认这一行没有留下。
+通过 master 的 trovestack 提供的 `DIB_LOCAL_ELEMENTS_PATH` + `TROVE_DIB_EXTRA_ELEMENTS` 接入,不改 fork 里的元素。
+
+**怎么判断是不是这个问题**:手动跑 `Probe runner egress` 工作流(`.github/workflows/probe-egress.yaml`)。
+它对 pypi.org、files.pythonhosted.org、opendev.org、archive.ubuntu.com 的**每一个地址**分别发请求。
+2026-09-29 的结果:所有 IPv4 地址 200,**所有** IPv6 地址连接超时(不是部分地址)。
+只发一个请求看通不通是不够的:各个客户端各自挑地址,一个通了不代表其它地址也通。
+
+> 根因在网络侧(runner 所在租户网段的 IPv6 出网),不在这个仓库。这里只是让构建不受它影响。
+
 ### 需要的仓库配置
 
 Secrets(和 `openstack-cloud-images` 相同):`OS_AUTH_URL` `OS_USERNAME` `OS_PASSWORD`
@@ -94,7 +114,10 @@ guest agent 做备份/恢复时,在这个镜像里执行 `python3 main.py --driv
 > 经 `harbor.tue.jp/cache-ghcr/...` 匿名拉取也是 200,没有做任何可见性设置。
 > 以后新增的镜像如果拉取返回 401/404,先到 GitHub 的 Packages 页面看这个包是不是 private。
 
-新增 datastore 或版本:往 `backup/images.json` 加一行。
+新增 datastore 或版本:往 `backup/images.json` 加一行。`strategy` 填 guest agent 实际传给 `--driver` 的值,
+即该 datastore 的 app 类 `get_backup_strategy()` 的返回值 —— **不一定等于** `[<datastore>] backup_strategy` 的默认值:
+MySQL 和 Percona 的默认值是 `innobackupex`,实际永远返回 `xtrabackup`(`trove/guestagent/datastore/mysql/service.py`)。
+第一版流水线从配置默认值取策略名,结果对 mysql 镜像验证的是 guest 不会用的驱动。
 
 ## 单元测试
 
