@@ -55,3 +55,13 @@ Variable:`OS_GATEWAY_VIP` —— runner 解析不了 `*.openstack.svc.cluster.lo
 所以 URL 里必须保留名字,不能直接换成 IP)。
 
 Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
+
+## 单元测试
+
+`tools/run-unit-tests.sh <trove 检出目录> [flake8 路径...]` —— 在和服务镜像相同的 Python(3.12)与
+约束文件下,跑 Trove 单元测试、备份容器单元测试和 flake8。先把检出目录复制一份再跑,
+不会在源码树里留下 `.stestr`、`trove_test.sqlite` 之类;未提交的改动也会被带上。
+
+测试**串行**执行:这些测试共用一个 sqlite 文件,并发跑会随机报 `database is locked`,
+而且失败的用例每次都不一样,很容易被误判成代码问题。
+
