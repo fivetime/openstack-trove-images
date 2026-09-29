@@ -68,9 +68,10 @@ Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
 | postgresql | `harbor.tue.jp/cache-dockerhub/library/postgres` |
 | redis | `harbor.tue.jp/cache-dockerhub/library/redis` |
 | valkey | `harbor.tue.jp/cache-dockerhub/valkey/valkey` |
-| keydb | `harbor.tue.jp/cache-dockerhub/eqalpha/keydb` |
+| keydb | `harbor.tue.jp/cache-quay/openstack.trove/keydb`(Docker Hub 上的 tag 是 `x86_64_v6.3.3` 这种带架构前缀的,对不上版本号;上游重打过 tag 放在 quay) |
 
 **datastore 的版本号就是镜像 tag**(Victoria 起的规矩):注册 `7.2` 这个版本,拉的就是 `redis:7.2`。
+上表每一行都用表里的版本实测过匿名拉取(2026-09-29);新增版本前先验证 tag 存在。
 
 ## 备份镜像
 
