@@ -1,0 +1,10 @@
+[
+  {"datastore": "mysql",      "version": "8.4",   "os_version": "24.04"},
+  {"datastore": "mariadb",    "version": "11.4",  "os_version": "24.04"},
+  {"datastore": "mariadb",    "version": "11.8",  "os_version": "24.04"},
+  {"datastore": "postgresql", "version": "17",    "os_version": "24.04"},
+  {"datastore": "postgresql", "version": "18",    "os_version": "24.04"},
+  {"datastore": "valkey",     "version": "9",     "os_version": "24.04"},
+  {"datastore": "keydb",      "version": "6.3.3", "os_version": "24.04"},
+  {"datastore": "redis",      "version": "7.2",   "os_version": "24.04"}
+]

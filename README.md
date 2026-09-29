@@ -10,8 +10,8 @@ Trove 代码来自 fork [`fivetime/openstack-trove`](https://github.com/fivetime
 | 目录 | 制品 | 去向 | 状态 |
 |---|---|---|---|
 | `guest/` | guest 虚机镜像(Ubuntu noble + docker + trove-guestagent) | Glance | ✅ 流水线已建 |
-| `datastores/<ds>/` | 各数据库的容器镜像 | harbor | 待做 |
-| `backup/` | 各数据库的备份容器镜像 | harbor | 待做 |
+| —— | 各数据库的容器镜像 | 不用构建:官方镜像经 harbor 代理缓存拉取 | ✅ |
+| `backup/` | 各数据库的备份容器镜像 | ghcr.io,guest 经 harbor 代理缓存拉取 | ✅ 流水线已建 |
 
 ## guest 镜像
 
@@ -55,6 +55,44 @@ Variable:`OS_GATEWAY_VIP` —— runner 解析不了 `*.openstack.svc.cluster.lo
 所以 URL 里必须保留名字,不能直接换成 IP)。
 
 Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
+
+## 数据库镜像
+
+数据库本身用各家**官方镜像**,不需要构建。guest 虚机里的 docker 按
+`[<datastore>] docker_image` + `:<datastore 版本号>` 拉取,指到 harbor 的代理缓存即可(匿名可拉):
+
+| datastore | `docker_image` |
+|---|---|
+| mysql | `harbor.tue.jp/cache-dockerhub/library/mysql` |
+| mariadb | `harbor.tue.jp/cache-quay/openstack.trove/mariadb`(上游自建,见 trove `playbooks/images/mariadb/`) |
+| postgresql | `harbor.tue.jp/cache-dockerhub/library/postgres` |
+| redis | `harbor.tue.jp/cache-dockerhub/library/redis` |
+| valkey | `harbor.tue.jp/cache-dockerhub/valkey/valkey` |
+| keydb | `harbor.tue.jp/cache-dockerhub/eqalpha/keydb` |
+
+**datastore 的版本号就是镜像 tag**(Victoria 起的规矩):注册 `7.2` 这个版本,拉的就是 `redis:7.2`。
+
+## 备份镜像
+
+工作流 `.github/workflows/build-backup-images.yaml`,矩阵在 `backup/images.json`。
+
+guest agent 做备份/恢复时,在这个镜像里执行 `python3 main.py --driver=<备份策略> ...`,所以镜像里
+必须是 **fork 的** `backup/` 代码 —— 上游镜像不认识 fork 新增的驱动。tag 同样是 datastore 版本号。
+
+- 产物:`ghcr.io/fivetime/trove/db-backup-<datastore>:<版本>`,用工作流自带的 token 推送,不需要额外凭据
+- guest 侧配置:`backup_docker_image = harbor.tue.jp/cache-ghcr/fivetime/trove/db-backup-<datastore>`
+- 在 GitHub 托管的 runner 上构建(只是 `docker build`,不需要 RaaS)
+- 每天 03:30 UTC 定时 + 手动;只有 fork 的 `backup/` 目录自上次构建后有改动才重建
+  (镜像标签 `jp.tue.trove.backup-revision` 记着构建时 `backup/` 的最后一个 commit)
+- 推送前验证:按该 datastore 的默认备份策略,在镜像里照 `main()` 的顺序解析参数并导入驱动类
+  (`backup/smoke.py`);同时确认一个不存在的驱动名会被拒绝
+
+> 验证不能用 `main.py --driver=X --help`:`--help` 在校验驱动名之前就退出了,传一个不存在的驱动也返回 0。
+
+> ghcr 上新建的包默认是 **private**。第一次推送后要到 GitHub 的 Packages 页面把
+> `trove/db-backup-*` 改成 public,否则 harbor 的代理缓存匿名拉不到。
+
+新增 datastore 或版本:往 `backup/images.json` 加一行。
 
 ## 单元测试
 

@@ -1,0 +1,160 @@
+name: Build Trove backup images
+
+# Builds the backup and restore image for every datastore version listed in
+# backup/images.json, from the backup/ directory of fivetime/openstack-trove.
+#
+# The guest agent runs "python3 main.py --driver=<backup strategy>" in this
+# image, so the image has to carry the fork's drivers: an upstream image
+# does not know the datastores the fork adds. It pulls the image named by
+# [<datastore>] backup_docker_image, tagged with the datastore version, so
+# the tag here is the datastore version and nothing else.
+#
+# Images go to ghcr.io with the workflow's own token. Guests pull them
+# through Harbor's ghcr proxy cache:
+#   harbor.tue.jp/cache-ghcr/fivetime/trove/db-backup-<datastore>
+#
+# An image is rebuilt only when backup/ changed since it was built.
+
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+    inputs:
+      trove_ref:
+        description: 'Branch or commit of fivetime/openstack-trove'
+        default: 'master-fivetime'
+      force:
+        description: 'Rebuild even if backup/ did not change'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: trove-backup-images
+  cancel-in-progress: false
+
+env:
+  TROVE_REF: ${{ inputs.trove_ref || 'master-fivetime' }}
+  IMAGE_PREFIX: ghcr.io/fivetime/trove/db-backup
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.read.outputs.images }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: echo "images=$(jq -c . backup/images.json)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.matrix.outputs.images) }}
+    env:
+      DATASTORE: ${{ matrix.image.datastore }}
+      VERSION: ${{ matrix.image.version }}
+      OS_VERSION: ${{ matrix.image.os_version }}
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+        with:
+          path: images
+
+      - name: Check out trove
+        uses: actions/checkout@v4
+        with:
+          repository: fivetime/openstack-trove
+          ref: ${{ env.TROVE_REF }}
+          path: trove
+          fetch-depth: 0
+
+      - name: Resolve revisions
+        id: rev
+        run: |
+          # The image only depends on backup/, so that is what decides
+          # whether it is stale, not the branch head.
+          echo "backup=$(git -C trove log -1 --format=%H -- backup)" >> "$GITHUB_OUTPUT"
+          echo "head=$(git -C trove rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE_PREFIX-$DATASTORE:$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Decide whether to build
+        id: check
+        env:
+          IMAGE: ${{ steps.rev.outputs.image }}
+          WANT: ${{ steps.rev.outputs.backup }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          have=""
+          if docker pull -q "$IMAGE" >/dev/null 2>&1; then
+            have=$(docker image inspect "$IMAGE" \
+              -f '{{ index .Config.Labels "jp.tue.trove.backup-revision" }}')
+          fi
+          echo "backup/ is at $WANT, image has ${have:-nothing}"
+          if [[ "$have" == "$WANT" && "$FORCE" != "true" ]]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.check.outputs.build == 'true'
+        env:
+          IMAGE: ${{ steps.rev.outputs.image }}
+        run: |
+          docker build trove/backup \
+            --build-arg DATASTORE="$DATASTORE" \
+            --build-arg DATASTORE_VERSION="$VERSION" \
+            --build-arg BASE_OS_VERSION="$OS_VERSION" \
+            --label "org.opencontainers.image.source=https://github.com/fivetime/openstack-trove" \
+            --label "org.opencontainers.image.revision=${{ steps.rev.outputs.head }}" \
+            --label "jp.tue.trove.backup-revision=${{ steps.rev.outputs.backup }}" \
+            --tag "$IMAGE"
+
+      - name: Verify the image loads this datastore's driver
+        if: steps.check.outputs.build == 'true'
+        env:
+          IMAGE: ${{ steps.rev.outputs.image }}
+        run: |
+          # The strategy the guest agent will ask for, read from the same
+          # commit's configuration defaults rather than guessed from the
+          # datastore name.
+          strategy=$(python3 - <<'PY'
+          import os, re
+          src = open('trove/trove/common/cfg.py').read()
+          ds = os.environ['DATASTORE']
+          # Either a family builder call or a plain option list.
+          m = re.search(r"datastore_name='%s',\s*backup_strategy='([^']+)'" % ds, src)
+          if not m:
+              group = re.search(r"%s_opts = \[(.*?)\n\]" % ds, src, re.S).group(1)
+              m = re.search(r"'backup_strategy',\s*default='([^']+)'", group)
+          print(m.group(1))
+          PY
+          )
+          echo "backup strategy for $DATASTORE: $strategy"
+          docker run --rm -i "$IMAGE" python3 - "$strategy" < images/backup/smoke.py
+          # The check has to be able to fail: a driver that does not exist
+          # must be refused.
+          if docker run --rm -i "$IMAGE" python3 - no-such-driver \
+              < images/backup/smoke.py >/dev/null 2>&1; then
+            echo "smoke check accepted a driver that does not exist" >&2
+            exit 1
+          fi
+
+      - name: Push
+        if: steps.check.outputs.build == 'true'
+        env:
+          IMAGE: ${{ steps.rev.outputs.image }}
+        run: |
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE from trove ${{ steps.rev.outputs.head }}" >> "$GITHUB_STEP_SUMMARY"
