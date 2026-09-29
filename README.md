@@ -90,8 +90,9 @@ guest agent 做备份/恢复时,在这个镜像里执行 `python3 main.py --driv
 
 > 验证不能用 `main.py --driver=X --help`:`--help` 在校验驱动名之前就退出了,传一个不存在的驱动也返回 0。
 
-> ghcr 上新建的包默认是 **private**。第一次推送后要到 GitHub 的 Packages 页面把
-> `trove/db-backup-*` 改成 public,否则 harbor 的代理缓存匿名拉不到。
+> 首次推送后实测(2026-09-29):`ghcr.io/fivetime/trove/db-backup-redis:7.2` 直接匿名拉取 200,
+> 经 `harbor.tue.jp/cache-ghcr/...` 匿名拉取也是 200,没有做任何可见性设置。
+> 以后新增的镜像如果拉取返回 401/404,先到 GitHub 的 Packages 页面看这个包是不是 private。
 
 新增 datastore 或版本:往 `backup/images.json` 加一行。
 
