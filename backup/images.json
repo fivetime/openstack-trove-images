@@ -8,5 +8,6 @@
   {"datastore": "postgresql", "version": "18", "os_version": "24.04", "strategy": "pg_basebackup"},
   {"datastore": "valkey", "version": "9", "os_version": "24.04", "strategy": "valkeybackup"},
   {"datastore": "keydb", "version": "6.3.3", "os_version": "24.04", "strategy": "keydbbackup"},
-  {"datastore": "redis", "version": "7.2", "os_version": "24.04", "strategy": "redisbackup"}
+  {"datastore": "redis", "version": "7.2", "os_version": "24.04", "strategy": "redisbackup"},
+  {"datastore": "mongodb", "version": "8.2", "os_version": "24.04", "strategy": "mongodump"}
 ]
