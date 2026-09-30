@@ -87,6 +87,8 @@ Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
 | mariadb | `harbor.tue.jp/cache-quay/openstack.trove/mariadb`(上游自建,见 trove `playbooks/images/mariadb/`) |
 | postgresql | `harbor.tue.jp/cache-dockerhub/library/postgres` |
 | redis | `harbor.tue.jp/cache-dockerhub/library/redis` |
+| percona | `harbor.tue.jp/cache-dockerhub/percona/percona-server` |
+| pxc | `harbor.tue.jp/cache-dockerhub/percona/percona-xtradb-cluster` |
 | valkey | `harbor.tue.jp/cache-dockerhub/valkey/valkey` |
 | keydb | `harbor.tue.jp/cache-quay/openstack.trove/keydb`(Docker Hub 上的 tag 是 `x86_64_v6.3.3` 这种带架构前缀的,对不上版本号;上游重打过 tag 放在 quay) |
 
