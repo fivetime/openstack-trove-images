@@ -10,5 +10,6 @@
   {"datastore": "keydb", "version": "6.3.3", "os_version": "24.04", "strategy": "keydbbackup"},
   {"datastore": "redis", "version": "7.2", "os_version": "24.04", "strategy": "redisbackup"},
   {"datastore": "mongodb", "version": "8.2", "os_version": "24.04", "strategy": "mongodump"},
-  {"datastore": "cassandra", "version": "5.0", "os_version": "24.04", "strategy": "nodetoolsnapshot"}
+  {"datastore": "cassandra", "version": "5.0", "os_version": "24.04", "strategy": "nodetoolsnapshot"},
+  {"datastore": "couchdb", "version": "3.5", "os_version": "24.04", "strategy": "couchdbbackup"}
 ]
