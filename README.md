@@ -92,6 +92,7 @@ Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
 | mongodb | `harbor.tue.jp/cache-dockerhub/library/mongo`(⚠ 8.0 系列在 6.19+ 内核上拒绝启动 `SERVER-121912`,注册 8.2) |
 | cassandra | `harbor.tue.jp/cache-dockerhub/library/cassandra` |
 | couchdb | `harbor.tue.jp/cache-dockerhub/library/couchdb` |
+| couchbase | `harbor.tue.jp/cache-dockerhub/library/couchbase`(社区版的 tag 是 `community-7.6.2`,datastore 版本名就注册成这个 tag,版本号 7.6.2) |
 | valkey | `harbor.tue.jp/cache-dockerhub/valkey/valkey` |
 | keydb | `harbor.tue.jp/cache-quay/openstack.trove/keydb`(Docker Hub 上的 tag 是 `x86_64_v6.3.3` 这种带架构前缀的,对不上版本号;上游重打过 tag 放在 quay) |
 

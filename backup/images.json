@@ -1,15 +1,86 @@
 [
-  {"datastore": "mysql", "version": "8.4", "os_version": "24.04", "strategy": "xtrabackup"},
-  {"datastore": "percona", "version": "8.4", "os_version": "24.04", "strategy": "xtrabackup"},
-  {"datastore": "pxc", "version": "8.4", "os_version": "24.04", "strategy": "xtrabackup"},
-  {"datastore": "mariadb", "version": "11.4", "os_version": "24.04", "strategy": "mariabackup"},
-  {"datastore": "mariadb", "version": "11.8", "os_version": "24.04", "strategy": "mariabackup"},
-  {"datastore": "postgresql", "version": "17", "os_version": "24.04", "strategy": "pg_basebackup"},
-  {"datastore": "postgresql", "version": "18", "os_version": "24.04", "strategy": "pg_basebackup"},
-  {"datastore": "valkey", "version": "9", "os_version": "24.04", "strategy": "valkeybackup"},
-  {"datastore": "keydb", "version": "6.3.3", "os_version": "24.04", "strategy": "keydbbackup"},
-  {"datastore": "redis", "version": "7.2", "os_version": "24.04", "strategy": "redisbackup"},
-  {"datastore": "mongodb", "version": "8.2", "os_version": "24.04", "strategy": "mongodump"},
-  {"datastore": "cassandra", "version": "5.0", "os_version": "24.04", "strategy": "nodetoolsnapshot"},
-  {"datastore": "couchdb", "version": "3.5", "os_version": "24.04", "strategy": "couchdbbackup"}
+  {
+    "datastore": "mysql",
+    "version": "8.4",
+    "os_version": "24.04",
+    "strategy": "xtrabackup"
+  },
+  {
+    "datastore": "percona",
+    "version": "8.4",
+    "os_version": "24.04",
+    "strategy": "xtrabackup"
+  },
+  {
+    "datastore": "pxc",
+    "version": "8.4",
+    "os_version": "24.04",
+    "strategy": "xtrabackup"
+  },
+  {
+    "datastore": "mariadb",
+    "version": "11.4",
+    "os_version": "24.04",
+    "strategy": "mariabackup"
+  },
+  {
+    "datastore": "mariadb",
+    "version": "11.8",
+    "os_version": "24.04",
+    "strategy": "mariabackup"
+  },
+  {
+    "datastore": "postgresql",
+    "version": "17",
+    "os_version": "24.04",
+    "strategy": "pg_basebackup"
+  },
+  {
+    "datastore": "postgresql",
+    "version": "18",
+    "os_version": "24.04",
+    "strategy": "pg_basebackup"
+  },
+  {
+    "datastore": "valkey",
+    "version": "9",
+    "os_version": "24.04",
+    "strategy": "valkeybackup"
+  },
+  {
+    "datastore": "keydb",
+    "version": "6.3.3",
+    "os_version": "24.04",
+    "strategy": "keydbbackup"
+  },
+  {
+    "datastore": "redis",
+    "version": "7.2",
+    "os_version": "24.04",
+    "strategy": "redisbackup"
+  },
+  {
+    "datastore": "mongodb",
+    "version": "8.2",
+    "os_version": "24.04",
+    "strategy": "mongodump"
+  },
+  {
+    "datastore": "cassandra",
+    "version": "5.0",
+    "os_version": "24.04",
+    "strategy": "nodetoolsnapshot"
+  },
+  {
+    "datastore": "couchdb",
+    "version": "3.5",
+    "os_version": "24.04",
+    "strategy": "couchdbbackup"
+  },
+  {
+    "datastore": "couchbase",
+    "version": "community-7.6.2",
+    "os_version": "24.04",
+    "strategy": "couchbasebackup"
+  }
 ]
