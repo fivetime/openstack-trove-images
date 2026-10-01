@@ -13,5 +13,6 @@
   {"datastore": "cassandra", "version": "5.0", "os_version": "24.04", "strategy": "nodetoolsnapshot"},
   {"datastore": "couchdb", "version": "3.5", "os_version": "24.04", "strategy": "couchdbbackup"},
   {"datastore": "couchbase", "version": "community-7.6.2", "os_version": "24.04", "strategy": "couchbasebackup"},
-  {"datastore": "vertica", "version": "25.4.0-0-minimal", "os_version": "24.04", "strategy": "verticabackup"}
+  {"datastore": "vertica", "version": "25.4.0-0-minimal", "os_version": "24.04", "strategy": "verticabackup"},
+  {"datastore": "db2", "version": "12.1.5.0", "os_version": "24.04", "strategy": "db2backup"}
 ]

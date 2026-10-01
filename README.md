@@ -94,6 +94,7 @@ Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
 | couchdb | `harbor.tue.jp/cache-dockerhub/library/couchdb` |
 | couchbase | `harbor.tue.jp/cache-dockerhub/library/couchbase`(社区版的 tag 是 `community-7.6.2`,⚠ 无前缀的 `7.6.2` 是企业版;Trove 拿**版本号**当 tag,所以 `--version-number community-7.6.2`) |
 | vertica | `harbor.tue.jp/cache-dockerhub/opentext/vertica-k8s`(官方已不出 CE 镜像,用 k8s 镜像;tag 带 `-minimal`,版本号注册成 tag 如 `25.4.0-0-minimal`;⚠ 26.1 起不再接受镜像自带的 CE license,要用 `vertica_license` 模块装正式 license) |
+| db2 | `harbor.tue.jp/cache-icr/db2_community/db2`(icr.io 的代理缓存,10-01 新建;社区版镜像,装 IBM 发的 license 即升级为对应版本,同一个镜像) |
 | valkey | `harbor.tue.jp/cache-dockerhub/valkey/valkey` |
 | keydb | `harbor.tue.jp/cache-quay/openstack.trove/keydb`(Docker Hub 上的 tag 是 `x86_64_v6.3.3` 这种带架构前缀的,对不上版本号;上游重打过 tag 放在 quay) |
 
