@@ -1,0 +1,29 @@
+#!/bin/bash
+
+if [ ${DIB_DEBUG_TRACE:-0} -gt 0 ]; then
+    set -x
+fi
+set -eu
+set -o pipefail
+
+image_mirror=${DIB_BUILD_MIRROR_IMAGE:-http://archive.ubuntu.com/ubuntu}
+build_mirror=${DIB_DISTRIBUTION_MIRROR:-$image_mirror}
+
+if [ "$build_mirror" = "$image_mirror" ]; then
+    exit 0
+fi
+
+# Every "deb <mirror> <suite> <components>" line, whatever the mirror.
+awk -v m="$image_mirror" '$1 == "deb" { $2 = m } { print }' \
+    /etc/apt/sources.list > /etc/apt/sources.list.new
+mv /etc/apt/sources.list.new /etc/apt/sources.list
+
+if grep -q "$build_mirror" /etc/apt/sources.list; then
+    echo "the build mirror is still in /etc/apt/sources.list" >&2
+    exit 1
+fi
+
+# The package lists are named after the host they came from; apt fetches
+# fresh ones from the image mirror at its next update.
+host=$(echo "$build_mirror" | sed -e 's|^[a-z]*://||' -e 's|/.*||')
+rm -f /var/lib/apt/lists/"${host}"_*
