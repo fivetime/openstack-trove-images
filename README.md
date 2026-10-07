@@ -64,6 +64,17 @@ openstack datastore version create <版本> <datastore> <manager> "" \
 
 > 根因在网络侧(runner 所在租户网段的 IPv6 出网),不在这个仓库。这里只是让构建不受它影响。
 
+### 构建期间用就近的 Ubuntu 源(`guest/elements/build-mirror`)
+
+debootstrap 和 chroot 里的 apt 都从 `DIB_DISTRIBUTION_MIRROR` 取包,dib 的 `ubuntu-minimal` 会把这个地址原样写进
+镜像的 `/etc/apt/sources.list`。2026-10-07 实例:默认源 http://archive.ubuntu.com/ubuntu 从构建机下载只有 30 KB/s,
+debootstrap 每个包要 30 秒到 4 分钟,连续两次构建(正常 13 分钟)在 90 分钟上限被取消;同一时刻
+http://ftp.jaist.ac.jp/pub/Linux/ubuntu 有 1.2 MB/s。
+
+流水线现在把 `DIB_DISTRIBUTION_MIRROR` 设为 jaist(仓库变量 `DIB_DISTRIBUTION_MIRROR` 可覆盖),这个元素在 `finalise.d`
+把 `sources.list` 的每一行 `deb` 改回 `DIB_BUILD_MIRROR_IMAGE`(默认 http://archive.ubuntu.com/ubuntu),并删掉从构建源
+取来的包列表,成品镜像和用默认源构建出来的一样;流水线挂载镜像核对时会确认 `sources.list` 只剩默认源。
+
 ### 需要的仓库配置
 
 Secrets(和 `openstack-cloud-images` 相同):`OS_AUTH_URL` `OS_USERNAME` `OS_PASSWORD`
