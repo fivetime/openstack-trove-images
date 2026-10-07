@@ -39,3 +39,16 @@ jobs:
           probe files.pythonhosted.org /packages/9b/d4/d3c7d029de6287ff7bd048e628920d4336b4f8d82cfc00ff078bdbb212a3/Routes-2.5.1-py2.py3-none-any.whl.metadata
           probe opendev.org /openstack/requirements/raw/branch/master/upper-constraints.txt
           probe archive.ubuntu.com /ubuntu/dists/noble/Release
+
+      - name: Download throughput of the Ubuntu mirrors
+        run: |
+          # The same package the guest image build fetches, from the default
+          # mirror and the one the build uses (DIB_DISTRIBUTION_MIRROR).
+          pkg=pool/main/p/perl/perl-base_5.38.2-3.2build2_amd64.deb
+          for m in http://archive.ubuntu.com/ubuntu http://jp.archive.ubuntu.com/ubuntu \
+                   http://ftp.jaist.ac.jp/pub/Linux/ubuntu; do
+            out=$(curl -4 -s -o /dev/null -m 120 \
+                    -w '%{http_code} %{size_download}B %{time_total}s %{speed_download}B/s' \
+                    "$m/$pkg") || true
+            echo "SPEED $m -> ${out:-no-response}"
+          done
