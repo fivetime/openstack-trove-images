@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [ ${DIB_DEBUG_TRACE:-0} -gt 0 ]; then
+    set -x
+fi
+set -eu
+set -o pipefail
+
+# The daemon waits up to this long for its containers at shutdown, each
+# with its own stop timeout.
+mkdir -p /etc/docker
+python3 - <<'PY'
+import json, os
+path = '/etc/docker/daemon.json'
+conf = json.load(open(path)) if os.path.exists(path) else {}
+conf['shutdown-timeout'] = 200
+json.dump(conf, open(path, 'w'), indent=2)
+PY
+
+# And systemd waits for the daemon as long.
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/stop-timeout.conf <<'CONF'
+[Service]
+TimeoutStopSec=200
+CONF
