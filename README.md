@@ -3,7 +3,7 @@
 Trove 的全部制品流水线,与 VM 操作系统镜像(`openstack-cloud-images`)分开维护。
 
 Trove 代码来自 fork [`fivetime/openstack-trove`](https://github.com/fivetime/openstack-trove)
-的 `master-fivetime` 分支(`master` 只跟上游;基于上游 master 而非 stable/2026.1,因为上游 datastore 的工作都落在 master)。这个 fork 按容器架构重新移植了 2020 年
+的 `master` 分支(fork 只有这一条工作分支:原来的 `master-fivetime` 已于 2026-10-10 在 5da7e09b 合入 `master` 并删除;基于上游 master 而非 stable/2026.1,因为上游 datastore 的工作都落在 master;同步上游用 opendev 的 openstack/trove)。这个 fork 按容器架构重新移植了 2020 年
 `aa1d4d22 Datastore containerization` 删掉的 datastore,因此**guest 镜像、数据库镜像、
 备份镜像都必须和 fork 配套**,不能用上游 tarballs / quay 上的现成品。
 

@@ -22,7 +22,7 @@ on:
     inputs:
       trove_ref:
         description: 'Branch or commit of fivetime/openstack-trove'
-        default: 'master-fivetime'
+        default: 'master'
       force:
         description: 'Rebuild even if backup/ did not change'
         type: boolean
@@ -37,7 +37,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TROVE_REF: ${{ inputs.trove_ref || 'master-fivetime' }}
+  TROVE_REF: ${{ inputs.trove_ref || 'master' }}
   IMAGE_PREFIX: ghcr.io/fivetime/trove/db-backup
 
 jobs:

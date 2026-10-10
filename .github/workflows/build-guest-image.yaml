@@ -20,7 +20,7 @@ on:
     inputs:
       trove_ref:
         description: 'Branch or commit of fivetime/openstack-trove'
-        default: 'master-fivetime'
+        default: 'master'
       force:
         description: 'Build even if Glance already has this commit'
         type: boolean
@@ -39,7 +39,7 @@ concurrency:
 
 env:
   TROVE_REPO: https://github.com/fivetime/openstack-trove
-  TROVE_REF: ${{ inputs.trove_ref || 'master-fivetime' }}
+  TROVE_REF: ${{ inputs.trove_ref || 'master' }}
   GUEST_OS: ubuntu
   GUEST_RELEASE: noble
   IMAGE_NAME: trove-guest-ubuntu-noble-fivetime
