@@ -43,6 +43,7 @@ id=$(openstack image create "$name" \
     --file "$raw" \
     --tag trove --tag fivetime \
     --property hw_rng_model=virtio \
+    --property hw_qemu_guest_agent=yes \
     --property hypervisor_type=qemu \
     --property os_distro=ubuntu \
     --property trove_commit="$commit" \
