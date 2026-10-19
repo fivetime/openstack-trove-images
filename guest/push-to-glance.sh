@@ -18,7 +18,8 @@
 #                           puts service users and their project in the
 #                           "service" domain, and a same-named project in
 #                           Default makes a bare name ambiguous.
-#   KEEP             older builds of the same name to keep (default: 2)
+#   KEEP             older builds of the same name to keep (default: 1, the
+#                    one before, to roll back to)
 
 set -Eeuo pipefail
 
@@ -27,7 +28,7 @@ name=${2:?image name}
 commit=${3:?trove commit}
 SERVICE_PROJECT=${SERVICE_PROJECT:-service}
 SERVICE_PROJECT_DOMAIN=${SERVICE_PROJECT_DOMAIN:-service}
-KEEP=${KEEP:-2}
+KEEP=${KEEP:-1}
 
 raw=${src%.*}.raw
 if [[ "$src" != "$raw" ]]; then
