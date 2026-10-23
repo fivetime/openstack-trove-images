@@ -125,6 +125,7 @@ jobs:
               systemctl is-enabled "$u"
             done
             test "$(systemctl is-enabled trove-image-loader.service)" = disabled
+            grep -q allow_other /etc/trove/conf.d/zz-incus-guest.conf
             id ubuntu
             test -f /usr/lib/tmpfiles.d/oci-system-resolv.conf
             test "$(cat /etc/machine-id)" = uninitialized

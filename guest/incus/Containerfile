@@ -113,6 +113,15 @@ RUN set -eu; \
     mkdir -p /etc/docker /etc/systemd/system/docker.service.d; \
     printf '{\n  "shutdown-timeout": 200\n}\n' > /etc/docker/daemon.json; \
     printf '[Service]\nTimeoutStopSec=200\n' > /etc/systemd/system/docker.service.d/stop-timeout.conf; \
+    # The agent's settings that only hold on an Incus guest, read after the
+    # deployment's files (the agent loads /etc/trove/conf.d in name order).
+    # mount_options: the Cinder volume is mounted through fuse2fs (the
+    # Flavor's mount interception, or fuse2fs itself); a FUSE mount is
+    # private to the mounting user unless allow_other is given, and the
+    # database runs as its own user in its container. The kernel's ext4
+    # of a KVM guest refuses the option, so it is not a deployment default.
+    printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other\n' > /etc/trove/conf.d/zz-incus-guest.conf; \
+    chown "$GUEST_USERNAME":root /etc/trove/conf.d/zz-incus-guest.conf; \
     # The ubuntu-guest element enables forwarding (Docker does too).
     printf 'net.ipv4.ip_forward=1\n' > /etc/sysctl.d/60-trove-guest.conf; \
     test -n "$TROVE_COMMIT"; \
