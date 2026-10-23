@@ -77,6 +77,7 @@ RUN set -eu; \
 COPY --from=agent /opt/guest-agent-venv /opt/guest-agent-venv
 COPY --from=agent /opt/guest-agent /opt/guest-agent
 COPY --from=agent /opt/upper-constraints.txt /opt/upper-constraints.txt
+COPY guest/incus/files /tmp/incus-files
 
 # What trove's ubuntu-guest and guest-agent dib elements do, minus the
 # development-mode parts: the guest user (no password; the KVM image's
@@ -120,8 +121,22 @@ RUN set -eu; \
     # private to the mounting user unless allow_other is given, and the
     # database runs as its own user in its container. The kernel's ext4
     # of a KVM guest refuses the option, so it is not a deployment default.
-    printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other\n' > /etc/trove/conf.d/zz-incus-guest.conf; \
+    # nofail and a short device timeout: systemd never sees the volume's
+    # device unit in a container (a static node, no udev event), so the
+    # fstab mount must not hold the boot; trove-data-volumes.service does
+    # the mount before Docker instead.
+    # user_port_driver: the NIC the platform gives the guest must stay in
+    # the guest (Incus stops the instance by taking its NICs back; one
+    # moved into the database container's namespace breaks every forced
+    # stop), so the database container gets an ipvlan sub-interface of it.
+    printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other,nofail,x-systemd.device-timeout=5s\nuser_port_driver = ipvlan\n' > /etc/trove/conf.d/zz-incus-guest.conf; \
     chown "$GUEST_USERNAME":root /etc/trove/conf.d/zz-incus-guest.conf; \
+    install -D -g root -o root -m 0755 /tmp/incus-files/trove-data-volumes /usr/local/sbin/trove-data-volumes; \
+    install -D -g root -o root -m 0644 /tmp/incus-files/trove-data-volumes.service /etc/systemd/system/trove-data-volumes.service; \
+    mkdir -p /etc/systemd/system/docker.service.d; \
+    printf '[Unit]\nRequires=trove-data-volumes.service\nAfter=trove-data-volumes.service\n' > /etc/systemd/system/docker.service.d/trove-data-volumes.conf; \
+    systemctl enable trove-data-volumes.service; \
+    rm -rf /tmp/incus-files; \
     # The ubuntu-guest element enables forwarding (Docker does too).
     printf 'net.ipv4.ip_forward=1\n' > /etc/sysctl.d/60-trove-guest.conf; \
     test -n "$TROVE_COMMIT"; \

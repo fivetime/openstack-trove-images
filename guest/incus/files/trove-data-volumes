@@ -1,0 +1,27 @@
+#!/bin/sh
+# Mount the data volumes /etc/fstab lists before Docker starts.
+#
+# In an Incus system container a Cinder volume is a static device node
+# (/dev/vdb, a unix-block device of Incus) with no udev event, so systemd
+# never sees dev-vdb.device and the fstab mount unit times out; with
+# nofail the boot goes on, but the volume stays unmounted and the database
+# container would initialise an empty database on the root disk. mount(8)
+# needs no udev: it mounts the fstab entry as is (the Flavor's mount
+# interception hands an ext4 mount to fuse2fs). Docker requires this unit.
+set -eu
+status=0
+while read -r what where fstype options dump pass; do
+    case "$what" in ''|\#*) continue ;; esac
+    case "$what" in /dev/*) ;; *) continue ;; esac
+    if findmnt -n "$where" >/dev/null 2>&1; then
+        continue
+    fi
+    if [ ! -e "$what" ]; then
+        echo "trove-data-volumes: $what for $where is not there" >&2
+        status=1
+        continue
+    fi
+    echo "trove-data-volumes: mounting $where from $what ($fstype)"
+    mount "$where" || status=1
+done < /etc/fstab
+exit $status
