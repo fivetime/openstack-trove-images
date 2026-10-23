@@ -128,11 +128,13 @@ RUN set -eu; \
     # device unit in a container (a static node, no udev event), so the
     # fstab mount must not hold the boot; trove-data-volumes.service does
     # the mount before Docker instead.
-    # user_port_driver: the NIC the platform gives the guest must stay in
-    # the guest (Incus stops the instance by taking its NICs back; one
-    # moved into the database container's namespace breaks every forced
-    # stop), so the database container gets an ipvlan sub-interface of it.
-    printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other,nofail,x-systemd.device-timeout=5s\nuser_port_driver = ipvlan\n' > /etc/trove/conf.d/zz-incus-guest.conf; \
+    # The user port keeps the deployment's driver (docker-hostnic moves it
+    # into the database container): the Incus driver rebuilds the guest's
+    # host-side VIF on a hard reboot or power-on since nova-incus 19d0053,
+    # so a NIC lost with the container's namespace no longer breaks the
+    # instance. user_port_driver = ipvlan is the alternative when the
+    # computes load the ipvlan module.
+    printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other,nofail,x-systemd.device-timeout=5s\n' > /etc/trove/conf.d/zz-incus-guest.conf; \
     chown "$GUEST_USERNAME":root /etc/trove/conf.d/zz-incus-guest.conf; \
     install -D -g root -o root -m 0755 /tmp/incus-files/trove-data-volumes /usr/local/sbin/trove-data-volumes; \
     install -D -g root -o root -m 0644 /tmp/incus-files/trove-data-volumes.service /etc/systemd/system/trove-data-volumes.service; \

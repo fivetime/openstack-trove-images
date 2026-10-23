@@ -127,7 +127,7 @@ jobs:
             done
             test "$(systemctl is-enabled trove-image-loader.service)" = disabled
             grep -q allow_other /etc/trove/conf.d/zz-incus-guest.conf
-            grep -q "user_port_driver = ipvlan" /etc/trove/conf.d/zz-incus-guest.conf
+            ! grep -q user_port_driver /etc/trove/conf.d/zz-incus-guest.conf
             systemctl is-enabled trove-data-volumes.service
             test -x /usr/local/sbin/trove-data-volumes
             id ubuntu
