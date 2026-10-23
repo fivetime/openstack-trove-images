@@ -132,8 +132,7 @@ RUN set -eu; \
     # into the database container): the Incus driver rebuilds the guest's
     # host-side VIF on a hard reboot or power-on since nova-incus 19d0053,
     # so a NIC lost with the container's namespace no longer breaks the
-    # instance. user_port_driver = ipvlan is the alternative when the
-    # computes load the ipvlan module.
+    # instance.
     printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other,nofail,x-systemd.device-timeout=5s\n' > /etc/trove/conf.d/zz-incus-guest.conf; \
     chown "$GUEST_USERNAME":root /etc/trove/conf.d/zz-incus-guest.conf; \
     install -D -g root -o root -m 0755 /tmp/incus-files/trove-data-volumes /usr/local/sbin/trove-data-volumes; \
