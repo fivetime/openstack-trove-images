@@ -112,7 +112,8 @@ jobs:
           # units enabled, fuse2fs for Cinder data volumes.
           cfg=$(docker image inspect "$IMAGE:$TAG" -f '{{ json .Config.Cmd }} {{ json .Config.Entrypoint }} {{ .Config.User }} {{ .Config.WorkingDir }}')
           echo "config: $cfg"
-          test "$cfg" = '["/sbin/init"] null  /'
+          # The base states the user as 0; an unset user is root as well.
+          test "$cfg" = '["/sbin/init"] null 0 /' || test "$cfg" = '["/sbin/init"] null  /'
           docker run --rm --entrypoint sh "$IMAGE:$TAG" -c '
             set -e
             test "$(cat /usr/share/oci-system/trove-guest-commit)" = "'"${{ steps.rev.outputs.sha }}"'"
