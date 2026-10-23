@@ -1,0 +1,145 @@
+name: Build Trove guest image for Incus
+
+# Builds the Trove guest image for Incus system containers
+# (guest/incus/Containerfile) and pushes it to ghcr.io, where the Incus
+# driver's publishing tool fetches it by digest. Publishing to Glance is
+# not done here: it runs on a trusted host with the qualified Incus client
+# (openstack-incus doc/source/oci_system_images.rst), after the image has
+# passed the driver's gate.
+#
+# The guest agent inside is the trove commit this run checked out, the same
+# way the KVM guest image carries it; the base is the Incus layer of the
+# shared OCI system images pinned in guest/incus/pins.env.
+
+on:
+  workflow_dispatch:
+    inputs:
+      trove_ref:
+        description: 'Branch or commit of fivetime/openstack-trove'
+        default: 'master'
+      force:
+        description: 'Build even if ghcr.io already has this trove commit on this base'
+        type: boolean
+        default: false
+      push:
+        description: 'Push to ghcr.io'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: trove-guest-incus-image
+  cancel-in-progress: false
+
+env:
+  TROVE_REF: ${{ inputs.trove_ref || 'master' }}
+  IMAGE: ghcr.io/fivetime/trove/guest-incus
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+        with:
+          path: images
+
+      - name: Check out trove
+        uses: actions/checkout@v4
+        with:
+          repository: fivetime/openstack-trove
+          ref: ${{ env.TROVE_REF }}
+          path: trove
+          # pbr derives the package version from tags; without history the
+          # guest agent would be built as 0.0.1.devN.
+          fetch-depth: 0
+
+      - name: Resolve the inputs
+        id: rev
+        run: |
+          set -o pipefail
+          sha=$(git -C trove rev-parse HEAD)
+          . images/guest/incus/pins.env
+          snapshot=$(docker buildx imagetools inspect "$BASE_IMAGE" \
+            --format '{{ index .Image.Config.Labels "io.fivetime.oci-system.apt-snapshot" }}')
+          test -n "$snapshot"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "base=$BASE_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "tag=${sha:0:7}-$snapshot" >> "$GITHUB_OUTPUT"
+          echo "trove $sha on $BASE_IMAGE (snapshot $snapshot)"
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Decide whether to build
+        id: check
+        env:
+          TAG: ${{ steps.rev.outputs.tag }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          if docker manifest inspect "$IMAGE:$TAG" >/dev/null 2>&1 && [[ "$FORCE" != "true" ]]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "ghcr.io already has $IMAGE:$TAG, skipping." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.check.outputs.build == 'true'
+        env:
+          TAG: ${{ steps.rev.outputs.tag }}
+        run: |
+          # The context is the workspace: the Containerfile copies ./trove.
+          docker build -f images/guest/incus/Containerfile \
+            --build-arg BASE_IMAGE="${{ steps.rev.outputs.base }}" \
+            --build-arg TROVE_COMMIT="${{ steps.rev.outputs.sha }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.base.name=${{ steps.rev.outputs.base }}" \
+            --tag "$IMAGE:$TAG" --tag "$IMAGE:latest" .
+
+      - name: Verify the image
+        if: steps.check.outputs.build == 'true'
+        env:
+          TAG: ${{ steps.rev.outputs.tag }}
+        run: |
+          # What the Incus driver's publisher checks for a derived image,
+          # and what the guest needs: PID 1 and user inherited from the
+          # base, the agent at this run's commit, Docker and the agent's
+          # units enabled, fuse2fs for Cinder data volumes.
+          cfg=$(docker image inspect "$IMAGE:$TAG" -f '{{ json .Config.Cmd }} {{ json .Config.Entrypoint }} {{ .Config.User }} {{ .Config.WorkingDir }}')
+          echo "config: $cfg"
+          test "$cfg" = '["/sbin/init"] null  /'
+          docker run --rm --entrypoint sh "$IMAGE:$TAG" -c '
+            set -e
+            test "$(cat /usr/share/oci-system/trove-guest-commit)" = "'"${{ steps.rev.outputs.sha }}"'"
+            test "$(cat /opt/guest-agent/.commit)" = "'"${{ steps.rev.outputs.sha }}"'"
+            test -x /opt/guest-agent-venv/bin/trove-guestagent
+            test -x /opt/guest-agent-venv/bin/trove-docker-plugin
+            command -v fuse2fs dockerd containerd runc
+            for u in docker.service containerd.service guest-agent.service docker-hostnic.socket; do
+              systemctl is-enabled "$u"
+            done
+            id ubuntu
+            test -f /usr/lib/tmpfiles.d/oci-system-resolv.conf
+            test "$(cat /etc/machine-id)" = uninitialized
+            ! ls /etc/ssh/ssh_host_* 2>/dev/null
+          '
+
+      - name: Push
+        if: steps.check.outputs.build == 'true' && inputs.push
+        env:
+          TAG: ${{ steps.rev.outputs.tag }}
+        run: |
+          docker push "$IMAGE:$TAG"
+          docker push "$IMAGE:latest"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{ .Manifest.Digest }}')
+          {
+            echo "Pushed $IMAGE:$TAG (also :latest) from trove ${{ steps.rev.outputs.sha }} on ${{ steps.rev.outputs.base }}"
+            echo
+            echo "Manifest digest for the Incus publisher: $digest"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"

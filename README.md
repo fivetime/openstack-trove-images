@@ -87,6 +87,36 @@ Variable:`OS_GATEWAY_VIP` —— runner 解析不了 `*.openstack.svc.cluster.lo
 
 Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
 
+## Incus 系统容器的 guest 镜像
+
+工作流 `.github/workflows/build-guest-incus-image.yaml`(只手动触发),配方
+`guest/incus/Containerfile`,基础镜像钉在 `guest/incus/pins.env`。
+
+**是什么:** Trove 跑在 Incus 系统容器上(nova-compute-incus,Flavor 授予 nesting)时用的
+guest,是一个 OCI 镜像而不是 qcow2:从 openstack-cloud-images 的 oci-system 流水线出的
+**Incus 层**(`ghcr.io/fivetime/oci-system/incus`,systemd 为 PID 1、cloud-init、sshd、
+fuse2fs)按摘要 `FROM`,加 Ubuntu 归档快照里的 docker.io/containerd/runc/apparmor/iptables
+和 guest agent。遵守 openstack-incus `doc/source/oci_system_images.rst` 的派生规则:不改
+CMD/ENTRYPOINT/USER/WORKDIR,不用 ENV,软件以 systemd 单元启用,不放密钥和 machine-id。
+
+**guest agent 和 KVM 镜像是同一份:** 工作流检出 fivetime/openstack-trove 的同一个 commit
+(带历史,pbr 要),在第一阶段用编译器装进 `/opt/guest-agent-venv`,只把 venv 和源码
+(去掉 `.git`,commit 记在 `/opt/guest-agent/.commit` 和
+`/usr/share/oci-system/trove-guest-commit`)拷进最终镜像;单元文件取自同一检出的
+guest-agent dib element。镜像的 `ubuntu` 用户(基础镜像自带)有免密 sudo 和 docker 组,
+没有密码。
+
+**推到哪:** `ghcr.io/fivetime/trove/guest-incus:<trove commit 前 7 位>-<基础层快照>`
+和 `:latest`,工作流摘要里打印 manifest 摘要。**不推 Glance**:发布要在有合格 Incus
+客户端的主机上跑 openstack-incus 的 `tools/publish-incus-oci-system-image.py`
+(`--source ghcr:fivetime/trove/guest-incus@sha256:<摘要>`),它会把 OCI 镜像规范化成
+Incus unified 镜像,写 `hypervisor_type=lxd`、`hw_incus_data_volume_fuse=true`、
+`trait:CUSTOM_INCUS_SYSTEM_CONTAINER=required` 等属性。发布后给镜像打标签
+`trove-incus` + `fivetime`(**不是** `trove`:datastore version 按"同时带全部标签的最新镜像"
+找图,带 `trove` 会被 KVM 的版本选中)并加 `trove_commit`,Incus 的 datastore version
+用 `image_tags: trove-incus,fivetime` 注册。部署与测试记录见 OpenStack-Helm-Deploy.md
+§8.3.4.100。
+
 ## 数据库镜像
 
 数据库本身用各家**官方镜像**,不需要构建。guest 虚机里的 docker 按
