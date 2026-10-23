@@ -102,7 +102,13 @@ RUN set -eu; \
     install -D -g root -o root -m 0644 "$src/docker-hostnic.socket" /lib/systemd/system/docker-hostnic.socket; \
     install -D -g root -o root -m 0644 "$src/docker-hostnic.service" /lib/systemd/system/docker-hostnic.service; \
     sed "s/GUEST_USERNAME/$GUEST_USERNAME/g" "$src/guest-agent.service" > /etc/systemd/system/guest-agent.service; \
-    systemctl enable containerd.service docker.service docker-hostnic.socket guest-agent.service trove-image-loader.service; \
+    # trove-image-loader stays disabled: it pulls the database image at
+    # boot, before the guest agent takes the user-facing NIC down, and the
+    # NIC's IPv6 default route is what dockerd then connects through; the
+    # connections it keeps die with the NIC and the agent's own pull hangs
+    # on them (production, 2026-10-23). The agent pulls after it has taken
+    # the NIC down, and retries.
+    systemctl enable containerd.service docker.service docker-hostnic.socket guest-agent.service; \
     # The docker-stop-timeout element: a database gets 200 s to stop.
     mkdir -p /etc/docker /etc/systemd/system/docker.service.d; \
     printf '{\n  "shutdown-timeout": 200\n}\n' > /etc/docker/daemon.json; \

@@ -124,6 +124,7 @@ jobs:
             for u in docker.service containerd.service guest-agent.service docker-hostnic.socket; do
               systemctl is-enabled "$u"
             done
+            test "$(systemctl is-enabled trove-image-loader.service)" = disabled
             id ubuntu
             test -f /usr/lib/tmpfiles.d/oci-system-resolv.conf
             test "$(cat /etc/machine-id)" = uninitialized
