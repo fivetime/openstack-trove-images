@@ -59,6 +59,9 @@ RUN set -eu; \
 FROM ${BASE_IMAGE}
 ARG TROVE_COMMIT
 ARG GUEST_USERNAME=ubuntu
+# Where guest/incus/files is in the build context (the workflow's context
+# is its workspace, with this repository under images/).
+ARG FILES=guest/incus/files
 
 # Docker from the Ubuntu archive snapshot, with its AppArmor and iptables
 # (the inner engine loads its own profiles inside the nested AppArmor
@@ -77,7 +80,7 @@ RUN set -eu; \
 COPY --from=agent /opt/guest-agent-venv /opt/guest-agent-venv
 COPY --from=agent /opt/guest-agent /opt/guest-agent
 COPY --from=agent /opt/upper-constraints.txt /opt/upper-constraints.txt
-COPY guest/incus/files /tmp/incus-files
+COPY ${FILES} /tmp/incus-files
 
 # What trove's ubuntu-guest and guest-agent dib elements do, minus the
 # development-mode parts: the guest user (no password; the KVM image's

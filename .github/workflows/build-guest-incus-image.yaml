@@ -97,6 +97,7 @@ jobs:
           docker build -f images/guest/incus/Containerfile \
             --build-arg BASE_IMAGE="${{ steps.rev.outputs.base }}" \
             --build-arg TROVE_COMMIT="${{ steps.rev.outputs.sha }}" \
+            --build-arg FILES=images/guest/incus/files \
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
             --label "org.opencontainers.image.base.name=${{ steps.rev.outputs.base }}" \
             --tag "$IMAGE:$TAG" --tag "$IMAGE:latest" .
