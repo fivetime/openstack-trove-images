@@ -48,6 +48,10 @@ RUN set -eu; \
     /opt/guest-agent-venv/bin/python -c 'import trove.cmd.guest, trove.guestagent.datastore.manager'; \
     git -C /opt/guest-agent rev-parse HEAD > /opt/guest-agent/.commit; \
     rm -rf /opt/guest-agent/.git; \
+    # trovestack's development keys (integration/scripts/files/keys) would
+    # be taken by the Incus publisher for baked-in SSH authorized_keys.
+    find /opt/guest-agent -name 'authorized_keys' -delete; \
+    rm -rf /opt/guest-agent/integration/scripts/files/keys; \
     find /opt/guest-agent-venv -name '__pycache__' -type d -prune -exec rm -rf {} +
 
 # ---------------------------------------------------------------------------
