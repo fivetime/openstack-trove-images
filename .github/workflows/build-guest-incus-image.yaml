@@ -129,6 +129,7 @@ jobs:
             grep -q allow_other /etc/trove/conf.d/zz-incus-guest.conf
             systemctl is-enabled trove-data-volumes.service
             test -x /usr/local/sbin/trove-data-volumes
+            grep -q "e2fsck -p" /usr/local/sbin/trove-data-volumes
             id ubuntu
             test -f /usr/lib/tmpfiles.d/oci-system-resolv.conf
             test "$(cat /etc/machine-id)" = uninitialized

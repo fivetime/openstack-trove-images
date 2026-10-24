@@ -8,7 +8,25 @@
 # container would initialise an empty database on the root disk. mount(8)
 # needs no udev: it mounts the fstab entry as is (the Flavor's mount
 # interception hands an ext4 mount to fuse4fs). Docker requires this unit.
+#
+# fuse4fs keeps no journal, and the interception mounts without a check,
+# so an ext4 volume is checked here first, unmounted: e2fsck -p, and when
+# that cannot repair it (exit status 4 or more, e.g. a corrupted orphan
+# list after a forced stop) e2fsck -fy with an error in the journal. The
+# volume is mounted only when the final status is below 4 (1 and 2 mean
+# errors were corrected).
 set -eu
+check() {
+    rc=0
+    e2fsck -p "$1" </dev/null || rc=$?
+    if [ "$rc" -ge 4 ]; then
+        echo "trove-data-volumes: ERROR e2fsck -p $1 exited $rc, running e2fsck -fy" >&2
+        rc=0
+        e2fsck -fy "$1" </dev/null || rc=$?
+        echo "trove-data-volumes: ERROR e2fsck -fy $1 exited $rc" >&2
+    fi
+    [ "$rc" -lt 4 ]
+}
 status=0
 while read -r what where fstype options dump pass; do
     case "$what" in ''|\#*) continue ;; esac
@@ -21,6 +39,15 @@ while read -r what where fstype options dump pass; do
         status=1
         continue
     fi
+    case "$fstype" in
+    ext2|ext3|ext4)
+        if ! check "$what"; then
+            echo "trove-data-volumes: ERROR $what for $where not mounted, the check failed" >&2
+            status=1
+            continue
+        fi
+        ;;
+    esac
     echo "trove-data-volumes: mounting $where from $what ($fstype)"
     mount "$where" || status=1
 done < /etc/fstab
