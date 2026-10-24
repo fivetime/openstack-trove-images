@@ -1,0 +1,8 @@
+# The Incus guest's checks, run in the built image (sh -s): fuse4fs for
+# Cinder data volumes, the FUSE mount options and the boot's own mounts.
+set -e
+command -v fuse4fs mount.fuse mke2fs
+grep -q allow_other /etc/trove/conf.d/zz-incus-guest.conf
+systemctl is-enabled trove-data-volumes.service
+test -x /usr/local/sbin/trove-data-volumes
+grep -q "e2fsck -p" /usr/local/sbin/trove-data-volumes

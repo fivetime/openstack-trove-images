@@ -1,14 +1,18 @@
-# The Trove guest image for Incus system containers.
+# The Trove guest image for OCI system containers: Incus system containers
+# and Kata.
 #
 # A Trove guest runs its database in Docker, so the image is a system image
 # (systemd as PID 1, cloud-init, sshd) that also carries Docker and the
-# Trove guest agent. It derives from the Incus layer of the shared OCI
-# system images (openstack-cloud-images, pipelines/oci-system), which
-# already satisfies the Incus driver's image contract (incus-oci-system-v1)
-# including fuse4fs for Cinder data volumes. This file follows the rules
-# for derived images in the driver's doc/source/oci_system_images.rst: FROM
-# by digest, no CMD/ENTRYPOINT/USER/WORKDIR/ENV, software enabled as
-# systemd units, no keys and no machine ID.
+# Trove guest agent. It derives from one platform layer of the shared OCI
+# system images (openstack-cloud-images, pipelines/oci-system): the Incus
+# layer (the Incus driver's contract incus-oci-system-v1, fuse4fs for
+# Cinder data volumes) or the Kata layer (nova-kata's system image
+# contract, /usr/libexec/nova-kata-init as PID 1). Each platform has a
+# directory guest/<platform> with the base pin (pins.env) and the files
+# only that platform needs (files/, with a setup script run last). The
+# recipe follows the rules both drivers set for derived images: FROM by
+# digest, no CMD/ENTRYPOINT/USER/WORKDIR/ENV/STOPSIGNAL, software enabled
+# as systemd units, no keys and no machine ID.
 #
 # The guest agent is the same code as in the KVM guest image: the trove
 # checkout in the build context (a clone of fivetime/openstack-trove with
@@ -20,11 +24,12 @@
 # same trove commit gives the same image.
 #
 # Build (the context must contain the trove checkout as ./trove):
-#   . guest/incus/pins.env
-#   docker build -f guest/incus/Containerfile --build-arg BASE_IMAGE=$BASE_IMAGE \
+#   . guest/<platform>/pins.env
+#   docker build -f guest/oci/Containerfile --build-arg BASE_IMAGE=$BASE_IMAGE \
+#     --build-arg FILES=guest/<platform>/files --build-arg PLATFORM=<platform> \
 #     --build-arg TROVE_COMMIT=$(git -C trove rev-parse HEAD) .
 
-# The base is pinned in pins.env next to this file; the workflow passes it.
+# The base is pinned in guest/<platform>/pins.env; the workflow passes it.
 ARG BASE_IMAGE
 
 # ---------------------------------------------------------------------------
@@ -49,7 +54,7 @@ RUN set -eu; \
     git -C /opt/guest-agent rev-parse HEAD > /opt/guest-agent/.commit; \
     rm -rf /opt/guest-agent/.git; \
     # trovestack's development keys (integration/scripts/files/keys) would
-    # be taken by the Incus publisher for baked-in SSH authorized_keys.
+    # be baked-in SSH authorized_keys, which both platforms refuse.
     find /opt/guest-agent -name 'authorized_keys' -delete; \
     rm -rf /opt/guest-agent/integration/scripts/files/keys; \
     find /opt/guest-agent-venv -name '__pycache__' -type d -prune -exec rm -rf {} +
@@ -59,9 +64,11 @@ RUN set -eu; \
 FROM ${BASE_IMAGE}
 ARG TROVE_COMMIT
 ARG GUEST_USERNAME=ubuntu
-# Where guest/incus/files is in the build context (the workflow's context
-# is its workspace, with this repository under images/).
-ARG FILES=guest/incus/files
+# The platform, and where guest/<platform>/files is in the build context
+# (the workflow's context is its workspace, with this repository under
+# images/).
+ARG PLATFORM
+ARG FILES
 
 # Docker from the Ubuntu archive snapshot, with its AppArmor and iptables
 # (the inner engine loads its own profiles inside the nested AppArmor
@@ -80,7 +87,7 @@ RUN set -eu; \
 COPY --from=agent /opt/guest-agent-venv /opt/guest-agent-venv
 COPY --from=agent /opt/guest-agent /opt/guest-agent
 COPY --from=agent /opt/upper-constraints.txt /opt/upper-constraints.txt
-COPY ${FILES} /tmp/incus-files
+COPY ${FILES} /tmp/platform-files
 
 # What trove's ubuntu-guest and guest-agent dib elements do, minus the
 # development-mode parts: the guest user (no password; the KVM image's
@@ -117,40 +124,20 @@ RUN set -eu; \
     mkdir -p /etc/docker /etc/systemd/system/docker.service.d; \
     printf '{\n  "shutdown-timeout": 200\n}\n' > /etc/docker/daemon.json; \
     printf '[Service]\nTimeoutStopSec=200\n' > /etc/systemd/system/docker.service.d/stop-timeout.conf; \
-    # The agent's settings that only hold on an Incus guest, read after the
-    # deployment's files (the agent loads /etc/trove/conf.d in name order).
-    # mount_options: the Cinder volume is mounted through fuse4fs (the
-    # Flavor's mount interception, or fuse4fs itself); a FUSE mount is
-    # private to the mounting user unless allow_other is given, and the
-    # database runs as its own user in its container. The kernel's ext4
-    # of a KVM guest refuses the option, so it is not a deployment default.
-    # nofail and a short device timeout: systemd never sees the volume's
-    # device unit in a container (a static node, no udev event), so the
-    # fstab mount must not hold the boot; trove-data-volumes.service does
-    # the mount before Docker instead.
-    # The user port keeps the deployment's driver (docker-hostnic moves it
-    # into the database container): the Incus driver rebuilds the guest's
-    # host-side VIF on a hard reboot or power-on since nova-incus 19d0053,
-    # so a NIC lost with the container's namespace no longer breaks the
-    # instance.
-    printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other,nofail,x-systemd.device-timeout=5s\n' > /etc/trove/conf.d/zz-incus-guest.conf; \
-    chown "$GUEST_USERNAME":root /etc/trove/conf.d/zz-incus-guest.conf; \
-    install -D -g root -o root -m 0755 /tmp/incus-files/trove-data-volumes /usr/local/sbin/trove-data-volumes; \
-    install -D -g root -o root -m 0644 /tmp/incus-files/trove-data-volumes.service /etc/systemd/system/trove-data-volumes.service; \
-    mkdir -p /etc/systemd/system/docker.service.d; \
-    printf '[Unit]\nRequires=trove-data-volumes.service\nAfter=trove-data-volumes.service\n' > /etc/systemd/system/docker.service.d/trove-data-volumes.conf; \
-    systemctl enable trove-data-volumes.service; \
-    rm -rf /tmp/incus-files; \
+    # What only one platform needs (guest/<platform>/files/setup).
+    test -n "$PLATFORM"; \
+    PLATFORM="$PLATFORM" GUEST_USERNAME="$GUEST_USERNAME" sh /tmp/platform-files/setup; \
+    rm -rf /tmp/platform-files; \
     # The ubuntu-guest element enables forwarding (Docker does too).
     printf 'net.ipv4.ip_forward=1\n' > /etc/sysctl.d/60-trove-guest.conf; \
     test -n "$TROVE_COMMIT"; \
     test "$(cat /opt/guest-agent/.commit)" = "$TROVE_COMMIT" || { echo "trove checkout is not $TROVE_COMMIT" >&2; exit 1; }; \
     printf '%s\n' "$TROVE_COMMIT" > /usr/share/oci-system/trove-guest-commit; \
-    test -x /opt/guest-agent-venv/bin/trove-guestagent; \
-    command -v fuse4fs >/dev/null
+    test -x /opt/guest-agent-venv/bin/trove-guestagent
 
-LABEL org.opencontainers.image.title="Trove guest image for Incus system containers (Ubuntu 24.04)" \
-      org.opencontainers.image.description="The Incus layer of the OCI system images plus Docker and the Trove guest agent; published to Glance with the Incus driver's OCI system image tool" \
+LABEL org.opencontainers.image.title="Trove guest image for ${PLATFORM} (Ubuntu 24.04)" \
+      org.opencontainers.image.description="The ${PLATFORM} layer of the OCI system images plus Docker and the Trove guest agent" \
       org.opencontainers.image.source="https://github.com/fivetime/openstack-trove-images" \
       io.fivetime.trove.guest-commit="${TROVE_COMMIT}" \
-      io.fivetime.oci-system.layer="trove-guest"
+      io.fivetime.oci-system.layer="trove-guest" \
+      io.fivetime.trove.guest-platform="${PLATFORM}"

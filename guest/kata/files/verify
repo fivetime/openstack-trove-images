@@ -1,0 +1,10 @@
+# The Kata guest's checks, run in the built image (sh -s): the Kata
+# layer's init and fstab mounts, nothing of the Incus guest's.
+set -e
+test -x /usr/libexec/nova-kata-init
+test -x /usr/libexec/nova-kata-blockdev
+systemctl is-enabled nova-kata-fstab.service
+test -s /usr/share/nova-kata/admin-user
+test ! -e /etc/trove/conf.d/zz-incus-guest.conf
+test ! -e /usr/local/sbin/trove-data-volumes
+command -v mkfs.ext4 e2fsck resize2fs

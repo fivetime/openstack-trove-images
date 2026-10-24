@@ -1,19 +1,25 @@
-name: Build Trove guest image for Incus
+name: Build Trove guest image for OCI system containers
 
-# Builds the Trove guest image for Incus system containers
-# (guest/incus/Containerfile) and pushes it to ghcr.io, where the Incus
-# driver's publishing tool fetches it by digest. Publishing to Glance is
-# not done here: it runs on a trusted host with the qualified Incus client
-# (openstack-incus doc/source/oci_system_images.rst), after the image has
-# passed the driver's gate.
+# Builds the Trove guest image for one OCI system container platform
+# (guest/oci/Containerfile on the platform layer pinned in
+# guest/<platform>/pins.env, with guest/<platform>/files) and pushes it to
+# ghcr.io/fivetime/trove/guest-<platform>. Publishing to Glance is not done
+# here: Incus images go through the Incus driver's publishing tool on a
+# trusted host (openstack-incus doc/source/oci_system_images.rst), Kata
+# images are exported as the OCI layout archive nova-kata takes
+# (guest/kata/oci-archive.py), each after the driver's gate.
 #
 # The guest agent inside is the trove commit this run checked out, the same
-# way the KVM guest image carries it; the base is the Incus layer of the
-# shared OCI system images pinned in guest/incus/pins.env.
+# way the KVM guest image carries it.
 
 on:
   workflow_dispatch:
     inputs:
+      platform:
+        description: 'The OCI system container platform'
+        type: choice
+        options: [incus, kata]
+        default: incus
       trove_ref:
         description: 'Branch or commit of fivetime/openstack-trove'
         default: 'master'
@@ -31,12 +37,13 @@ permissions:
   packages: write
 
 concurrency:
-  group: trove-guest-incus-image
+  group: trove-guest-${{ inputs.platform }}-image
   cancel-in-progress: false
 
 env:
   TROVE_REF: ${{ inputs.trove_ref || 'master' }}
-  IMAGE: ghcr.io/fivetime/trove/guest-incus
+  PLATFORM: ${{ inputs.platform }}
+  IMAGE: ghcr.io/fivetime/trove/guest-${{ inputs.platform }}
 
 jobs:
   build:
@@ -63,7 +70,7 @@ jobs:
         run: |
           set -o pipefail
           sha=$(git -C trove rev-parse HEAD)
-          . images/guest/incus/pins.env
+          . "images/guest/$PLATFORM/pins.env"
           snapshot=$(docker buildx imagetools inspect "$BASE_IMAGE" \
             --format '{{ index .Image.Config.Labels "io.fivetime.oci-system.apt-snapshot" }}')
           test -n "$snapshot"
@@ -94,10 +101,11 @@ jobs:
           TAG: ${{ steps.rev.outputs.tag }}
         run: |
           # The context is the workspace: the Containerfile copies ./trove.
-          docker build -f images/guest/incus/Containerfile \
+          docker build -f images/guest/oci/Containerfile \
             --build-arg BASE_IMAGE="${{ steps.rev.outputs.base }}" \
             --build-arg TROVE_COMMIT="${{ steps.rev.outputs.sha }}" \
-            --build-arg FILES=images/guest/incus/files \
+            --build-arg PLATFORM="$PLATFORM" \
+            --build-arg FILES="images/guest/$PLATFORM/files" \
             --label "org.opencontainers.image.revision=${{ github.sha }}" \
             --label "org.opencontainers.image.base.name=${{ steps.rev.outputs.base }}" \
             --tag "$IMAGE:$TAG" --tag "$IMAGE:latest" .
@@ -107,34 +115,35 @@ jobs:
         env:
           TAG: ${{ steps.rev.outputs.tag }}
         run: |
-          # What the Incus driver's publisher checks for a derived image,
-          # and what the guest needs: PID 1 and user inherited from the
-          # base, the agent at this run's commit, Docker and the agent's
-          # units enabled, fuse4fs for Cinder data volumes.
-          cfg=$(docker image inspect "$IMAGE:$TAG" -f '{{ json .Config.Cmd }} {{ json .Config.Entrypoint }} {{ .Config.User }} {{ .Config.WorkingDir }}')
-          echo "config: $cfg"
-          # The base states the user as 0; an unset user is root as well.
-          test "$cfg" = '["/sbin/init"] null 0 /' || test "$cfg" = '["/sbin/init"] null  /'
+          # What the drivers check for a derived image, and what the guest
+          # needs: the base's runtime configuration (PID 1, user, working
+          # directory, environment, stop signal) unchanged, the agent at
+          # this run's commit, Docker and the agent's units enabled, no
+          # machine identity or host keys; then the platform's own checks
+          # (guest/<platform>/files/verify).
+          fmt='{{ json .Config.Cmd }} {{ json .Config.Entrypoint }} {{ .Config.User }} {{ .Config.WorkingDir }} {{ json .Config.Env }} {{ .Config.StopSignal }}'
+          base=$(docker image inspect "${{ steps.rev.outputs.base }}" -f "$fmt")
+          cfg=$(docker image inspect "$IMAGE:$TAG" -f "$fmt")
+          echo "base:  $base"
+          echo "image: $cfg"
+          test "$cfg" = "$base"
           docker run --rm --entrypoint sh "$IMAGE:$TAG" -c '
             set -e
             test "$(cat /usr/share/oci-system/trove-guest-commit)" = "'"${{ steps.rev.outputs.sha }}"'"
             test "$(cat /opt/guest-agent/.commit)" = "'"${{ steps.rev.outputs.sha }}"'"
             test -x /opt/guest-agent-venv/bin/trove-guestagent
             test -x /opt/guest-agent-venv/bin/trove-docker-plugin
-            command -v fuse4fs dockerd containerd runc
+            command -v dockerd containerd runc
             for u in docker.service containerd.service guest-agent.service docker-hostnic.socket; do
               systemctl is-enabled "$u"
             done
             test "$(systemctl is-enabled trove-image-loader.service)" = disabled
-            grep -q allow_other /etc/trove/conf.d/zz-incus-guest.conf
-            systemctl is-enabled trove-data-volumes.service
-            test -x /usr/local/sbin/trove-data-volumes
-            grep -q "e2fsck -p" /usr/local/sbin/trove-data-volumes
             id ubuntu
             test -f /usr/lib/tmpfiles.d/oci-system-resolv.conf
             test "$(cat /etc/machine-id)" = uninitialized
             ! ls /etc/ssh/ssh_host_* 2>/dev/null
           '
+          docker run --rm -i --entrypoint sh "$IMAGE:$TAG" -s < "images/guest/$PLATFORM/files/verify"
 
       - name: Push
         if: steps.check.outputs.build == 'true' && inputs.push
@@ -147,6 +156,6 @@ jobs:
           {
             echo "Pushed $IMAGE:$TAG (also :latest) from trove ${{ steps.rev.outputs.sha }} on ${{ steps.rev.outputs.base }}"
             echo
-            echo "Manifest digest for the Incus publisher: $digest"
+            echo "Manifest digest: $digest"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"

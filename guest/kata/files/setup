@@ -1,0 +1,15 @@
+#!/bin/sh
+# The Kata guest's part of guest/oci/Containerfile, run as its last step
+# with the files of this directory in /tmp/platform-files.
+#
+# A Kata guest has its own kernel: a Cinder volume is a block device the
+# guest kernel mounts as ext4, and the Kata layer mounts the fstab
+# entries the agent writes before local-fs.target (nova-kata-fstab), so
+# the deployment's mount options and the boot's own mounts hold as on a
+# KVM guest and nothing is added here. The user port keeps the
+# deployment's driver (docker-hostnic moves the virtio NIC into the
+# database container); a hard reboot or stop/start recreates the VM and
+# the agent moves the NIC again.
+set -eu
+test -x /usr/libexec/nova-kata-init
+test -s /usr/share/nova-kata/admin-user

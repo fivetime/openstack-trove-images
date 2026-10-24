@@ -1,0 +1,29 @@
+#!/bin/sh
+# The Incus guest's part of guest/oci/Containerfile, run as its last step
+# with the files of this directory in /tmp/platform-files.
+set -eu
+files=/tmp/platform-files
+# The agent's settings that only hold on an Incus guest, read after the
+# deployment's files (the agent loads /etc/trove/conf.d in name order).
+# mount_options: the Cinder volume is mounted through fuse4fs (the
+# Flavor's mount interception, or fuse4fs itself); a FUSE mount is
+# private to the mounting user unless allow_other is given, and the
+# database runs as its own user in its container. The kernel's ext4
+# of a KVM guest refuses the option, so it is not a deployment default.
+# nofail and a short device timeout: systemd never sees the volume's
+# device unit in a container (a static node, no udev event), so the
+# fstab mount must not hold the boot; trove-data-volumes.service does
+# the mount before Docker instead.
+# The user port keeps the deployment's driver (docker-hostnic moves it
+# into the database container): the Incus driver rebuilds the guest's
+# host-side VIF on a hard reboot or power-on since nova-incus 19d0053,
+# so a NIC lost with the container's namespace no longer breaks the
+# instance.
+printf '[DEFAULT]\nmount_options = defaults,noatime,allow_other,nofail,x-systemd.device-timeout=5s\n' > /etc/trove/conf.d/zz-incus-guest.conf
+chown "$GUEST_USERNAME":root /etc/trove/conf.d/zz-incus-guest.conf
+install -D -g root -o root -m 0755 "$files/trove-data-volumes" /usr/local/sbin/trove-data-volumes
+install -D -g root -o root -m 0644 "$files/trove-data-volumes.service" /etc/systemd/system/trove-data-volumes.service
+mkdir -p /etc/systemd/system/docker.service.d
+printf '[Unit]\nRequires=trove-data-volumes.service\nAfter=trove-data-volumes.service\n' > /etc/systemd/system/docker.service.d/trove-data-volumes.conf
+systemctl enable trove-data-volumes.service
+command -v fuse4fs >/dev/null
