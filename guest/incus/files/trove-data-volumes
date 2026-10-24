@@ -7,7 +7,7 @@
 # nofail the boot goes on, but the volume stays unmounted and the database
 # container would initialise an empty database on the root disk. mount(8)
 # needs no udev: it mounts the fstab entry as is (the Flavor's mount
-# interception hands an ext4 mount to fuse2fs). Docker requires this unit.
+# interception hands an ext4 mount to fuse4fs). Docker requires this unit.
 set -eu
 status=0
 while read -r what where fstype options dump pass; do

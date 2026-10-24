@@ -95,7 +95,7 @@ Runner:`self-hosted`(RaaS)。构建要 sudo、loop/nbd 设备和 debootstrap。
 **是什么:** Trove 跑在 Incus 系统容器上(nova-compute-incus,Flavor 授予 nesting)时用的
 guest,是一个 OCI 镜像而不是 qcow2:从 openstack-cloud-images 的 oci-system 流水线出的
 **Incus 层**(`ghcr.io/fivetime/oci-system/incus`,systemd 为 PID 1、cloud-init、sshd、
-fuse2fs)按摘要 `FROM`,加 Ubuntu 归档快照里的 docker.io/containerd/runc/apparmor/iptables
+fuse4fs)按摘要 `FROM`,加 Ubuntu 归档快照里的 docker.io/containerd/runc/apparmor/iptables
 和 guest agent。遵守 openstack-incus `doc/source/oci_system_images.rst` 的派生规则:不改
 CMD/ENTRYPOINT/USER/WORKDIR,不用 ENV,软件以 systemd 单元启用,不放密钥和 machine-id。
 
@@ -110,7 +110,7 @@ guest-agent dib element。镜像的 `ubuntu` 用户(基础镜像自带)有免密
 和 `:latest`,工作流摘要里打印 manifest 摘要。**不推 Glance**:发布要在有合格 Incus
 客户端的主机上跑 openstack-incus 的 `tools/publish-incus-oci-system-image.py`
 (`--source ghcr:fivetime/trove/guest-incus@sha256:<摘要>`),它会把 OCI 镜像规范化成
-Incus unified 镜像,写 `hypervisor_type=lxd`、`hw_incus_data_volume_fuse=true`、
+Incus unified 镜像,写 `hypervisor_type=lxd`、`hw_incus_data_volume_fuse=fuse4fs`、
 `trait:CUSTOM_INCUS_SYSTEM_CONTAINER=required` 等属性。发布后给镜像打标签
 `trove-incus` + `fivetime`(**不是** `trove`:datastore version 按"同时带全部标签的最新镜像"
 找图,带 `trove` 会被 KVM 的版本选中)并加 `trove_commit`,Incus 的 datastore version

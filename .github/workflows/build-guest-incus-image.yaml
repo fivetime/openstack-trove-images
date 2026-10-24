@@ -110,7 +110,7 @@ jobs:
           # What the Incus driver's publisher checks for a derived image,
           # and what the guest needs: PID 1 and user inherited from the
           # base, the agent at this run's commit, Docker and the agent's
-          # units enabled, fuse2fs for Cinder data volumes.
+          # units enabled, fuse4fs for Cinder data volumes.
           cfg=$(docker image inspect "$IMAGE:$TAG" -f '{{ json .Config.Cmd }} {{ json .Config.Entrypoint }} {{ .Config.User }} {{ .Config.WorkingDir }}')
           echo "config: $cfg"
           # The base states the user as 0; an unset user is root as well.
@@ -121,7 +121,7 @@ jobs:
             test "$(cat /opt/guest-agent/.commit)" = "'"${{ steps.rev.outputs.sha }}"'"
             test -x /opt/guest-agent-venv/bin/trove-guestagent
             test -x /opt/guest-agent-venv/bin/trove-docker-plugin
-            command -v fuse2fs dockerd containerd runc
+            command -v fuse4fs dockerd containerd runc
             for u in docker.service containerd.service guest-agent.service docker-hostnic.socket; do
               systemctl is-enabled "$u"
             done

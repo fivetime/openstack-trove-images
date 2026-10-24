@@ -5,7 +5,7 @@
 # Trove guest agent. It derives from the Incus layer of the shared OCI
 # system images (openstack-cloud-images, pipelines/oci-system), which
 # already satisfies the Incus driver's image contract (incus-oci-system-v1)
-# including fuse2fs for Cinder data volumes. This file follows the rules
+# including fuse4fs for Cinder data volumes. This file follows the rules
 # for derived images in the driver's doc/source/oci_system_images.rst: FROM
 # by digest, no CMD/ENTRYPOINT/USER/WORKDIR/ENV, software enabled as
 # systemd units, no keys and no machine ID.
@@ -119,8 +119,8 @@ RUN set -eu; \
     printf '[Service]\nTimeoutStopSec=200\n' > /etc/systemd/system/docker.service.d/stop-timeout.conf; \
     # The agent's settings that only hold on an Incus guest, read after the
     # deployment's files (the agent loads /etc/trove/conf.d in name order).
-    # mount_options: the Cinder volume is mounted through fuse2fs (the
-    # Flavor's mount interception, or fuse2fs itself); a FUSE mount is
+    # mount_options: the Cinder volume is mounted through fuse4fs (the
+    # Flavor's mount interception, or fuse4fs itself); a FUSE mount is
     # private to the mounting user unless allow_other is given, and the
     # database runs as its own user in its container. The kernel's ext4
     # of a KVM guest refuses the option, so it is not a deployment default.
@@ -147,7 +147,7 @@ RUN set -eu; \
     test "$(cat /opt/guest-agent/.commit)" = "$TROVE_COMMIT" || { echo "trove checkout is not $TROVE_COMMIT" >&2; exit 1; }; \
     printf '%s\n' "$TROVE_COMMIT" > /usr/share/oci-system/trove-guest-commit; \
     test -x /opt/guest-agent-venv/bin/trove-guestagent; \
-    command -v fuse2fs >/dev/null
+    command -v fuse4fs >/dev/null
 
 LABEL org.opencontainers.image.title="Trove guest image for Incus system containers (Ubuntu 24.04)" \
       org.opencontainers.image.description="The Incus layer of the OCI system images plus Docker and the Trove guest agent; published to Glance with the Incus driver's OCI system image tool" \
