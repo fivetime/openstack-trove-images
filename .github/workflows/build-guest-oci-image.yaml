@@ -122,6 +122,8 @@ jobs:
           # machine identity or host keys; then the platform's own checks
           # (guest/<platform>/files/verify).
           fmt='{{ json .Config.Cmd }} {{ json .Config.Entrypoint }} {{ .Config.User }} {{ .Config.WorkingDir }} {{ json .Config.Env }} {{ .Config.StopSignal }}'
+          # The build pulled the base by digest without keeping a tag.
+          docker pull -q "${{ steps.rev.outputs.base }}" >/dev/null
           base=$(docker image inspect "${{ steps.rev.outputs.base }}" -f "$fmt")
           cfg=$(docker image inspect "$IMAGE:$TAG" -f "$fmt")
           echo "base:  $base"
