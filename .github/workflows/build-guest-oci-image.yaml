@@ -136,10 +136,12 @@ jobs:
             test -x /opt/guest-agent-venv/bin/trove-guestagent
             test -x /opt/guest-agent-venv/bin/trove-docker-plugin
             command -v dockerd containerd runc
-            for u in docker.service containerd.service guest-agent.service docker-hostnic.socket; do
+            for u in docker.service containerd.service guest-agent.service docker-hostnic.socket trove-image-loader.path; do
               systemctl is-enabled "$u"
             done
-            test "$(systemctl is-enabled trove-image-loader.service)" = disabled
+            # Only the path unit starts it, once the agent has settled the user port.
+            test "$(systemctl is-enabled trove-image-loader.service)" = static
+            grep -qx 'ConditionPathExists=/run/trove/user-port-settled' /etc/systemd/system/trove-image-loader.service
             id ubuntu
             test -f /usr/lib/tmpfiles.d/oci-system-resolv.conf
             test "$(cat /etc/machine-id)" = uninitialized
