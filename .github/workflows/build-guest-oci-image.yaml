@@ -76,7 +76,12 @@ jobs:
           test -n "$snapshot"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "base=$BASE_IMAGE" >> "$GITHUB_OUTPUT"
-          echo "tag=${sha:0:7}-$snapshot" >> "$GITHUB_OUTPUT"
+          # The base layer is part of the tag: moving BASE_IMAGE in pins.env
+          # with the same trove commit and snapshot must not reuse the image
+          # built on the old base.
+          base=${BASE_IMAGE##*@sha256:}
+          test -n "$base"
+          echo "tag=${sha:0:7}-$snapshot-${base:0:7}" >> "$GITHUB_OUTPUT"
           echo "trove $sha on $BASE_IMAGE (snapshot $snapshot)"
 
       - name: Log in to ghcr.io
